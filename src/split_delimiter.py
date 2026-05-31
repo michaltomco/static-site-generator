@@ -21,6 +21,7 @@ def split_nodes_delimiters(old_nodes: list[TextNode]) -> list[TextNode]:
         nodes = split_nodes_delimiter(nodes, delimiter, text_type)
     return nodes
 
+
 def split_nodes_delimiter(
     old_nodes: list[TextNode], delimiter: str, text_type: TextType
 ) -> list[TextNode]:
