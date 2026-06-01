@@ -3,7 +3,13 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from main import extract_title, generate_page, main, prepare_files
+from main import (
+    extract_title,
+    generate_page,
+    generate_pages_recursive,
+    main,
+    prepare_files,
+)
 
 
 class TestPrepareFiles(unittest.TestCase):
@@ -61,13 +67,13 @@ class TestPrepareFiles(unittest.TestCase):
 class TestMain(unittest.TestCase):
     def test_main_prepares_static_files_for_public_directory(self):
         with patch("main.prepare_files") as mock_prepare_files, patch(
-            "main.generate_page"
-        ) as mock_generate_page:
+            "main.generate_pages_recursive"
+        ) as mock_generate_pages_recursive:
             main()
 
         mock_prepare_files.assert_called_once_with(src="static", dest="public")
-        mock_generate_page.assert_called_once_with(
-            "content/index.md", "template.html", "public/index.html"
+        mock_generate_pages_recursive.assert_called_once_with(
+            "content", "template.html", "public"
         )
 
 
@@ -117,6 +123,48 @@ class TestGeneratePage(unittest.TestCase):
                     markdown_path,
                     os.path.join(tmpdir, "missing.html"),
                     os.path.join(tmpdir, "public", "index.html"),
+                )
+
+
+class TestGeneratePagesRecursive(unittest.TestCase):
+    def test_generate_pages_recursive_generates_matching_html_tree(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content_dir = os.path.join(tmpdir, "content")
+            blog_dir = os.path.join(content_dir, "blog", "post")
+            dest_dir = os.path.join(tmpdir, "public")
+            template_path = os.path.join(tmpdir, "template.html")
+            os.makedirs(blog_dir)
+            with open(os.path.join(content_dir, "index.md"), "w") as f:
+                f.write("# Home\n\nWelcome.")
+            with open(os.path.join(blog_dir, "index.md"), "w") as f:
+                f.write("# Blog Post\n\nPost body.")
+            with open(os.path.join(content_dir, "draft.txt"), "w") as f:
+                f.write("# Draft\n\nThis should not be generated.")
+            with open(template_path, "w") as f:
+                f.write("<title>{{ Title }}</title>{{ Content }}")
+
+            generate_pages_recursive(content_dir, template_path, dest_dir)
+
+            with open(os.path.join(dest_dir, "index.html")) as f:
+                self.assertEqual(
+                    f.read(),
+                    "<title>Home</title><div><h1>Home</h1><p>Welcome.</p></div>",
+                )
+            with open(os.path.join(dest_dir, "blog", "post", "index.html")) as f:
+                self.assertEqual(
+                    f.read(),
+                    "<title>Blog Post</title>"
+                    "<div><h1>Blog Post</h1><p>Post body.</p></div>",
+                )
+            self.assertFalse(os.path.exists(os.path.join(dest_dir, "draft.html")))
+
+    def test_generate_pages_recursive_rejects_missing_content_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(Exception):
+                generate_pages_recursive(
+                    os.path.join(tmpdir, "missing"),
+                    os.path.join(tmpdir, "template.html"),
+                    os.path.join(tmpdir, "public"),
                 )
 
 
