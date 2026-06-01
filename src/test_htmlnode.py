@@ -48,9 +48,14 @@ class TestHTMLNode(unittest.TestCase):
         self.assertEqual(node.to_html(), "Hello, world!")
 
     def test_leaf_to_html_missing_value_raises(self):
-        node = LeafNode("p", "")
+        node = LeafNode("p", None)
         with self.assertRaises(ValueError):
             node.to_html()
+
+    def test_leaf_to_html_allows_empty_string_value(self):
+        node = LeafNode("img", "", {"src": "/image.png", "alt": "image"})
+
+        self.assertEqual(node.to_html(), '<img src="/image.png" alt="image" ></img>')
 
     def test_to_html_with_children(self):
         child_node = LeafNode("span", "child")

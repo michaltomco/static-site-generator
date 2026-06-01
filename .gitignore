@@ -51,6 +51,9 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Generated site output
+public/
+
 # Translations
 *.mo
 *.pot
