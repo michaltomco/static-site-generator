@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch
 
 from main import (
@@ -66,14 +67,26 @@ class TestPrepareFiles(unittest.TestCase):
 
 class TestMain(unittest.TestCase):
     def test_main_prepares_static_files_for_public_directory(self):
-        with patch("main.prepare_files") as mock_prepare_files, patch(
+        with patch.object(sys, "argv", ["main.py"]), patch(
+            "main.prepare_files"
+        ) as mock_prepare_files, patch(
             "main.generate_pages_recursive"
         ) as mock_generate_pages_recursive:
             main()
 
-        mock_prepare_files.assert_called_once_with(src="static", dest="public")
+        mock_prepare_files.assert_called_once_with(src="static", dest="docs")
         mock_generate_pages_recursive.assert_called_once_with(
-            "content", "template.html", "public"
+            "content", "template.html", "docs", "/"
+        )
+
+    def test_main_uses_cli_basepath_when_provided(self):
+        with patch.object(sys, "argv", ["main.py", "/static-site-generator/"]), patch(
+            "main.prepare_files"
+        ), patch("main.generate_pages_recursive") as mock_generate_pages_recursive:
+            main()
+
+        mock_generate_pages_recursive.assert_called_once_with(
+            "content", "template.html", "docs", "/static-site-generator/"
         )
 
 
@@ -89,7 +102,7 @@ class TestGeneratePage(unittest.TestCase):
             with open(template_path, "w") as f:
                 f.write("<title>{{ Title }}</title><main>{{ Content }}</main>")
 
-            generate_page(markdown_path, template_path, dest_path)
+            generate_page(markdown_path, template_path, dest_path, "/")
 
             with open(dest_path) as f:
                 self.assertEqual(
@@ -110,6 +123,7 @@ class TestGeneratePage(unittest.TestCase):
                     os.path.join(tmpdir, "missing.md"),
                     template_path,
                     os.path.join(tmpdir, "public", "index.html"),
+                    "/",
                 )
 
     def test_generate_page_rejects_missing_template_file(self):
@@ -123,7 +137,27 @@ class TestGeneratePage(unittest.TestCase):
                     markdown_path,
                     os.path.join(tmpdir, "missing.html"),
                     os.path.join(tmpdir, "public", "index.html"),
+                    "/",
                 )
+
+    def test_generate_page_rewrites_root_relative_paths_with_basepath(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            markdown_path = os.path.join(tmpdir, "index.md")
+            template_path = os.path.join(tmpdir, "template.html")
+            dest_path = os.path.join(tmpdir, "docs", "index.html")
+
+            with open(markdown_path, "w") as f:
+                f.write("# Title\n\n![alt](/images/pic.png)\n\n[Home](/)")
+            with open(template_path, "w") as f:
+                f.write('<link href="/index.css" rel="stylesheet" />{{ Content }}')
+
+            generate_page(markdown_path, template_path, dest_path, "/repo/")
+
+            with open(dest_path) as f:
+                html = f.read()
+            self.assertIn('href="/repo/index.css"', html)
+            self.assertIn('src="/repo/images/pic.png"', html)
+            self.assertIn('href="/repo/"', html)
 
 
 class TestGeneratePagesRecursive(unittest.TestCase):
@@ -143,7 +177,7 @@ class TestGeneratePagesRecursive(unittest.TestCase):
             with open(template_path, "w") as f:
                 f.write("<title>{{ Title }}</title>{{ Content }}")
 
-            generate_pages_recursive(content_dir, template_path, dest_dir)
+            generate_pages_recursive(content_dir, template_path, dest_dir, "/")
 
             with open(os.path.join(dest_dir, "index.html")) as f:
                 self.assertEqual(
@@ -165,6 +199,7 @@ class TestGeneratePagesRecursive(unittest.TestCase):
                     os.path.join(tmpdir, "missing"),
                     os.path.join(tmpdir, "template.html"),
                     os.path.join(tmpdir, "public"),
+                    "/",
                 )
 
 
